@@ -245,7 +245,7 @@ def invite_member(
 
     group = db.scalar(select(Group).where(Group.id == group_id))
     target_username = payload.username.strip().lower()
-    target_user = db.scalar(select(User).where(User.username == target_username))
+    target_user = db.scalar(select(User).where(func.lower(User.username) == target_username))
 
     # Generic failure if user not found or either party blocked (FR-072)
     if not target_user or is_user_blocked(db, current_user.id, target_user.id):

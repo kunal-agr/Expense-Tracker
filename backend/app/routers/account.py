@@ -57,7 +57,7 @@ def change_username(
         )
 
     # Check uniqueness
-    existing = db.scalar(select(User).where(User.username == new_username))
+    existing = db.scalar(select(User).where(func.lower(User.username) == new_username.lower()))
     if existing:
         raise AppException(
             status_code=status.HTTP_409_CONFLICT,

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy import select, or_, update
+from sqlalchemy import select, or_, update, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -77,7 +77,7 @@ def register(
 ):
     """Register a new user account with email, username, and password (FR-001 - FR-003, FR-012)."""
     # Check duplicate email
-    existing_email = db.scalar(select(User).where(User.email == payload.email))
+    existing_email = db.scalar(select(User).where(func.lower(User.email) == payload.email.lower()))
     if existing_email:
         raise AppException(
             status_code=status.HTTP_409_CONFLICT,
@@ -86,7 +86,7 @@ def register(
         )
 
     # Check duplicate username
-    existing_username = db.scalar(select(User).where(User.username == payload.username))
+    existing_username = db.scalar(select(User).where(func.lower(User.username) == payload.username.lower()))
     if existing_username:
         raise AppException(
             status_code=status.HTTP_409_CONFLICT,
@@ -156,7 +156,7 @@ def login(
     """Authenticate with email or username and password (FR-004 - FR-005, NFR-007)."""
     login_id = payload.login.strip().lower()
     user = db.scalar(
-        select(User).where(or_(User.email == login_id, User.username == login_id))
+        select(User).where(or_(func.lower(User.email) == login_id, func.lower(User.username) == login_id))
     )
 
     # Generic error message to prevent account enumeration (NFR-007)

@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -53,7 +53,7 @@ def block_user(
             message="You cannot block yourself.",
         )
 
-    target_user = db.scalar(select(User).where(User.username == target_username))
+    target_user = db.scalar(select(User).where(func.lower(User.username) == target_username))
     if not target_user:
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -97,7 +97,7 @@ def unblock_user(
 ):
     """Unblock a user by username (FR-072)."""
     target_username = username.strip().lower()
-    target_user = db.scalar(select(User).where(User.username == target_username))
+    target_user = db.scalar(select(User).where(func.lower(User.username) == target_username))
     if not target_user:
         raise AppException(
             status_code=status.HTTP_404_NOT_FOUND,
