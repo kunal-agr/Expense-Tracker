@@ -26,6 +26,8 @@ from app.routers import (
     groups,
     splits,
     notifications,
+    dashboard,
+    export,
 )
 
 app = FastAPI(
@@ -70,6 +72,8 @@ app.include_router(blocks.router, prefix="/api/v1")
 app.include_router(groups.router, prefix="/api/v1")
 app.include_router(splits.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
+app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(export.router, prefix="/api/v1")
 
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])
