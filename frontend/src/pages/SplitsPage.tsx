@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../lib/utils';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -23,48 +24,63 @@ import {
 } from 'lucide-react';
 
 interface SplitParticipant {
-  id: string;
+  id: number;
+  user_id: number | null;
   username: string;
   share_amount: number;
-  status: 'pending' | 'accepted' | 'rejected';
-  accepted_at: string | null;
-  rejected_at: string | null;
+  status: 'pending' | 'accepted' | 'rejected' | 'expired';
+  responded_at: string | null;
+  is_payer: boolean;
 }
 
 interface SplitItem {
-  id: string;
-  transaction_id: string;
+  id: number;
+  payer_id: number;
+  payer_username: string;
+  group_id: number | null;
+  group_name: string | null;
   total_amount: number;
-  calculation_mode: 'exact' | 'percentage' | 'shares';
-  description: string | null;
-  creator_username: string;
-  is_creator: boolean;
-  status: 'pending' | 'completed' | 'cancelled' | 'expired';
+  split_type: 'exact' | 'percentage' | 'shares';
+  note: string | null;
+  status: 'pending' | 'locked' | 'cancelled';
   created_at: string;
   expires_at: string;
   participants: SplitParticipant[];
+  user_share_status: string | null;
+  user_share_amount: number | null;
+}
+
+interface CategoryItem {
+  id: number;
+  name: string;
+  type?: string;
+  parent_id: number | null;
+  subcategories?: CategoryItem[];
 }
 
 interface TransactionItem {
-  id: string;
+  id: number;
   type: string;
   amount: number;
-  description: string | null;
+  category_id: number;
+  note: string | null;
   category_name?: string;
   date: string;
-  is_readonly?: boolean;
 }
 
 export default function SplitsPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'created' | 'participating'>('all');
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'all' | 'created' | 'participating'>('all');
 
   // Modals
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedSplitDetail, setSelectedSplitDetail] = useState<SplitItem | null>(null);
 
   // Form states for Create Split
-  const [selectedTxId, setSelectedTxId] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [note, setNote] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Card' | 'Cash'>('UPI');
   const [calcMode, setCalcMode] = useState<'exact' | 'percentage' | 'shares'>('exact');
   const [participantsList, setParticipantsList] = useState<{ username: string; value: string }[]>([
     { username: '', value: '' },
@@ -76,17 +92,41 @@ export default function SplitsPage() {
   const { data: splits = [], isLoading } = useQuery<SplitItem[]>({
     queryKey: ['splits', activeTab],
     queryFn: async () => {
-      const res = await api.get(`/splits?filter=${activeTab}`);
+      const param = activeTab === 'all' ? '' : `?filter_type=${activeTab}`;
+      const res = await api.get(`/splits${param}`);
       return res.data;
     },
   });
 
-  // Fetch expense transactions for create split
+  // Fetch expense categories
+  const { data: categories = [] } = useQuery<CategoryItem[]>({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const res = await api.get('/categories');
+      return res.data;
+    },
+  });
+
+  // Flatten categories
+  const expenseCategories = React.useMemo(() => {
+    const list: { id: number; name: string }[] = [];
+    categories.forEach((cat) => {
+      list.push({ id: cat.id, name: cat.name });
+      if (cat.subcategories) {
+        cat.subcategories.forEach((sub) => {
+          list.push({ id: sub.id, name: `— ${sub.name}` });
+        });
+      }
+    });
+    return list;
+  }, [categories]);
+
+  // Fetch recent expenses to optionally pre-fill
   const { data: recentTxs = [] } = useQuery<TransactionItem[]>({
     queryKey: ['recent-expenses-for-split'],
     queryFn: async () => {
-      const res = await api.get('/transactions?type=expense&limit=30');
-      return res.data.items || [];
+      const res = await api.get('/transactions?type=expense&limit=20');
+      return res.data?.items || [];
     },
     enabled: isCreateModalOpen,
   });
@@ -99,15 +139,16 @@ export default function SplitsPage() {
       queryClient.invalidateQueries({ queryKey: ['splits'] });
       queryClient.invalidateQueries({ queryKey: ['wallet'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       closeCreateModal();
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.message || 'Failed to create split');
+      setFormError(err.response?.data?.message || err.message || 'Failed to create split');
     },
   });
 
   const acceptMutation = useMutation({
-    mutationFn: async (splitId: string) => {
+    mutationFn: async (splitId: number) => {
       return api.post(`/splits/${splitId}/accept`);
     },
     onSuccess: () => {
@@ -117,37 +158,40 @@ export default function SplitsPage() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to accept split');
+      alert(err.response?.data?.message || err.message || 'Failed to accept split');
     },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async (splitId: string) => {
+    mutationFn: async (splitId: number) => {
       return api.post(`/splits/${splitId}/reject`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['splits'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to reject split');
+      alert(err.response?.data?.message || err.message || 'Failed to reject split');
     },
   });
 
   const cancelMutation = useMutation({
-    mutationFn: async (splitId: string) => {
+    mutationFn: async (splitId: number) => {
       return api.post(`/splits/${splitId}/cancel`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['splits'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to cancel split (a participant may have already accepted)');
+      alert(err.response?.data?.message || err.message || 'Failed to cancel split (a participant may have already accepted)');
     },
   });
 
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
-    setSelectedTxId('');
+    setTotalAmount('');
+    setCategoryId('');
+    setNote('');
+    setPaymentMethod('UPI');
     setCalcMode('exact');
     setParticipantsList([{ username: '', value: '' }]);
     setRemainderBearer('');
@@ -168,30 +212,56 @@ export default function SplitsPage() {
     setParticipantsList(updated);
   };
 
-  const selectedTransaction = recentTxs.find((t) => t.id === selectedTxId);
+  const handleSelectRecentTx = (txIdStr: string) => {
+    const tx = recentTxs.find((t) => t.id === parseInt(txIdStr, 10));
+    if (tx) {
+      setTotalAmount(tx.amount.toString());
+      if (tx.category_id) setCategoryId(tx.category_id.toString());
+      if (tx.note) setNote(tx.note);
+    }
+  };
 
   const handleCreateSplit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTxId) {
-      setFormError('Please select an expense transaction to split');
+    const tot = parseInt(totalAmount, 10);
+    const catId = parseInt(categoryId, 10);
+
+    if (isNaN(tot) || tot <= 0) {
+      setFormError('Total bill amount must be a positive integer');
+      return;
+    }
+    if (!catId || isNaN(catId)) {
+      setFormError('Please select an expense category');
       return;
     }
 
     const cleanedParticipants = participantsList
-      .map((p) => ({
-        username: p.username.trim().toLowerCase(),
-        value: parseFloat(p.value),
-      }))
-      .filter((p) => p.username && !isNaN(p.value) && p.value > 0);
+      .map((p) => {
+        const u = p.username.trim().toLowerCase();
+        const v = parseFloat(p.value);
+        if (!u || isNaN(v) || v <= 0) return null;
+
+        if (calcMode === 'exact') {
+          return { username: u, amount: Math.round(v) };
+        } else if (calcMode === 'percentage') {
+          return { username: u, percentage: v };
+        } else {
+          return { username: u, shares: Math.round(v) };
+        }
+      })
+      .filter(Boolean);
 
     if (cleanedParticipants.length === 0) {
-      setFormError('At least one valid participant is required');
+      setFormError('At least one other participant with a valid share is required');
       return;
     }
 
     createSplitMutation.mutate({
-      transaction_id: selectedTxId,
-      calculation_mode: calcMode,
+      total_amount: tot,
+      split_type: calcMode,
+      category_id: catId,
+      payment_method: paymentMethod,
+      note: note.trim() || undefined,
       participants: cleanedParticipants,
       remainder_bearer_username: remainderBearer.trim().toLowerCase() || undefined,
     });
@@ -209,13 +279,13 @@ export default function SplitsPage() {
         </div>
         <Button onClick={() => setIsCreateModalOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Split an Expense
+          Split a Bill
         </Button>
       </div>
 
       {/* Tabs */}
       <div className="flex border-b border-border space-x-6 text-sm font-medium">
-        {(['all', 'pending', 'created', 'participating'] as const).map((tab) => (
+        {(['all', 'created', 'participating'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -225,7 +295,7 @@ export default function SplitsPage() {
                 : 'text-text-secondary hover:text-text-primary'
             }`}
           >
-            {tab} Splits
+            {tab === 'all' ? 'All Splits' : tab === 'created' ? 'Created by Me' : 'Awaiting / Participating'}
             {activeTab === tab && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-t" />
             )}
@@ -245,21 +315,22 @@ export default function SplitsPage() {
             <Users2 className="w-12 h-12 mx-auto mb-3 opacity-40" />
             <h3 className="text-base font-semibold text-text-primary">No splits found</h3>
             <p className="text-sm mt-1 mb-4">
-              {activeTab === 'pending'
-                ? 'No pending split requests awaiting your action.'
-                : 'Create a split from any of your expense transactions.'}
+              {activeTab === 'participating'
+                ? 'No active split bills where you are a participant.'
+                : 'Create a split to divide an expense among friends.'}
             </p>
-            <Button onClick={() => setIsCreateModalOpen(true)}>Split an Expense</Button>
+            <Button onClick={() => setIsCreateModalOpen(true)}>Split a Bill</Button>
           </div>
         ) : (
           <div className="divide-y divide-border">
             {splits.map((split) => {
-              const myParticipantRecord = !split.is_creator
-                ? split.participants.find((p) => p.status === 'pending')
-                : null;
-              const isExpired = split.status === 'expired';
-              const isCompleted = split.status === 'completed';
+              const isCreator = split.payer_username === user?.username;
+              const myParticipant = split.participants.find(
+                (p) => p.username === user?.username && !p.is_payer
+              );
+              const isPendingMyAction = myParticipant && myParticipant.status === 'pending';
               const isCancelled = split.status === 'cancelled';
+              const isLocked = split.status === 'locked';
 
               return (
                 <div key={split.id} className="p-5 space-y-3 hover:bg-surface-elevated/40 transition">
@@ -271,32 +342,32 @@ export default function SplitsPage() {
                       <div>
                         <div className="flex items-center space-x-2">
                           <span className="font-semibold text-text-primary text-base">
-                            {split.description || 'Split Bill'}
+                            {split.note || `Bill Split #${split.id}`}
                           </span>
                           <Badge
                             variant={
-                              isCompleted
+                              isLocked
                                 ? 'income'
-                                : isCancelled || isExpired
-                                ? 'neutral'
+                                : isCancelled
+                                ? 'danger'
                                 : 'neutral'
                             }
                           >
                             {split.status.toUpperCase()}
                           </Badge>
                           <span className="text-xs text-text-muted capitalize">
-                            ({split.calculation_mode} split)
+                            ({split.split_type} split)
                           </span>
                         </div>
                         <p className="text-xs text-text-secondary mt-0.5">
-                          {split.is_creator ? 'Initiated by You' : `Initiated by @${split.creator_username}`} • Total:{' '}
+                          {isCreator ? 'Paid by You' : `Paid by @${split.payer_username}`} • Total:{' '}
                           <span className="font-semibold text-text-primary">{formatINR(split.total_amount)}</span>
                         </p>
                       </div>
                     </div>
 
                     {/* Actions for Participant */}
-                    {!split.is_creator && myParticipantRecord && split.status === 'pending' && (
+                    {isPendingMyAction && split.status !== 'cancelled' && (
                       <div className="flex items-center space-x-2">
                         <Button
                           size="sm"
@@ -305,7 +376,7 @@ export default function SplitsPage() {
                           onClick={() => acceptMutation.mutate(split.id)}
                         >
                           <CheckCircle className="w-4 h-4 mr-1.5" />
-                          Pay {formatINR(myParticipantRecord.share_amount)}
+                          Pay {formatINR(myParticipant.share_amount)}
                         </Button>
                         <Button
                           size="sm"
@@ -321,7 +392,7 @@ export default function SplitsPage() {
                     )}
 
                     {/* Actions for Creator */}
-                    {split.is_creator && split.status === 'pending' && (
+                    {isCreator && split.status === 'pending' && (
                       <Button
                         size="sm"
                         variant="ghost"
@@ -341,17 +412,26 @@ export default function SplitsPage() {
                       <div
                         key={p.id}
                         className={`inline-flex items-center px-2.5 py-1 rounded-md border text-xs font-medium ${
-                          p.status === 'accepted'
+                          p.is_payer
+                            ? 'bg-primary-500/10 border-primary-500/30 text-primary-500'
+                            : p.status === 'accepted'
                             ? 'bg-accent-income/10 border-accent-income/30 text-accent-income'
                             : p.status === 'rejected'
                             ? 'bg-accent-expense/10 border-accent-expense/30 text-accent-expense line-through'
+                            : p.status === 'expired'
+                            ? 'bg-surface border-border text-text-muted line-through'
                             : 'bg-surface border-border text-text-secondary'
                         }`}
                       >
-                        <span>@{p.username}: {formatINR(p.share_amount)}</span>
-                        <span className="ml-1.5 capitalize text-[10px] opacity-80">
-                          ({p.status})
+                        <span>
+                          @{p.username}
+                          {p.is_payer ? ' (Payer)' : ''}: {formatINR(p.share_amount)}
                         </span>
+                        {!p.is_payer && (
+                          <span className="ml-1.5 capitalize text-[10px] opacity-80">
+                            ({p.status})
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -374,7 +454,7 @@ export default function SplitsPage() {
       <Modal
         isOpen={isCreateModalOpen}
         onClose={closeCreateModal}
-        title="Split an Expense"
+        title="Split a Bill"
       >
         <form onSubmit={handleCreateSplit} className="space-y-4">
           {formError && (
@@ -383,29 +463,76 @@ export default function SplitsPage() {
             </div>
           )}
 
-          {/* Select Transaction */}
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1">
-              Select Expense Transaction
-            </label>
-            <select
-              value={selectedTxId}
-              onChange={(e) => setSelectedTxId(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:border-primary-500 focus:outline-none"
+          {/* Quick pick from recent expenses */}
+          {recentTxs.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-text-secondary mb-1">
+                Auto-fill from recent expense (Optional)
+              </label>
+              <select
+                onChange={(e) => handleSelectRecentTx(e.target.value)}
+                defaultValue=""
+                className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-text-primary focus:border-primary-500 focus:outline-none"
+              >
+                <option value="">-- Or enter bill details below --</option>
+                {recentTxs.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {formatINR(t.amount)} — {t.note || t.category_name || 'Expense'} ({t.date})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Total Bill Amount (₹)"
+              type="number"
+              min="1"
+              placeholder="e.g. 1500"
+              value={totalAmount}
+              onChange={(e) => setTotalAmount(e.target.value)}
               required
-            >
-              <option value="">-- Choose Expense --</option>
-              {recentTxs.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {formatINR(t.amount)} — {t.description || t.category_name || 'Expense'} ({t.date})
-                </option>
+              autoFocus
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1">Category</label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:border-primary-500 focus:outline-none"
+                required
+              >
+                <option value="">-- Choose Category --</option>
+                {expenseCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Payment Method */}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">Paid Via</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['UPI', 'Card', 'Cash'] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => setPaymentMethod(method)}
+                  className={`py-1.5 text-xs font-semibold rounded-lg border transition ${
+                    paymentMethod === method
+                      ? 'border-primary-500 bg-primary-500/10 text-primary-500'
+                      : 'border-border text-text-secondary hover:bg-surface-elevated'
+                  }`}
+                >
+                  {method}
+                </button>
               ))}
-            </select>
-            {selectedTransaction && (
-              <p className="text-xs text-text-secondary mt-1">
-                Selected amount: <span className="font-semibold">{formatINR(selectedTransaction.amount)}</span>
-              </p>
-            )}
+            </div>
           </div>
 
           {/* Calculation Mode */}
@@ -432,12 +559,12 @@ export default function SplitsPage() {
           {/* Participants Input */}
           <div className="space-y-2">
             <label className="block text-sm font-medium text-text-primary">
-              Participants & Shares
+              Participants & Shares (excluding yourself)
             </label>
             {participantsList.map((p, idx) => (
               <div key={idx} className="flex items-center space-x-2">
                 <Input
-                  placeholder="Username (e.g. alice)"
+                  placeholder="Username (e.g. bob)"
                   value={p.username}
                   onChange={(e) => handleParticipantChange(idx, 'username', e.target.value)}
                   className="flex-1"
@@ -504,12 +631,19 @@ export default function SplitsPage() {
             </div>
           )}
 
+          <Input
+            label="Bill Note / Description (Optional)"
+            placeholder="e.g. Dinner at Olive, Cab to airport"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+
           <div className="flex justify-end space-x-3 pt-4 border-t border-border">
             <Button variant="outline" type="button" onClick={closeCreateModal}>
               Cancel
             </Button>
             <Button type="submit" isLoading={createSplitMutation.isPending}>
-              Send Split Request
+              Send Split Bill
             </Button>
           </div>
         </form>

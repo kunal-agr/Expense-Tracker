@@ -21,27 +21,33 @@ import {
 } from 'lucide-react';
 
 interface RecurringRule {
-  id: string;
+  id: number;
+  user_id: number;
   type: 'income' | 'expense';
   amount: number;
-  category_id: string;
+  category_id: number;
   category_name?: string;
-  description: string | null;
+  payment_method: string;
+  note: string | null;
+  frequency: string;
   day_of_month: number;
-  is_active: boolean;
-  last_run_at: string | null;
-  next_run_at: string | null;
+  start_date: string;
+  end_date: string | null;
+  is_paused: boolean;
+  created_at: string;
 }
 
 interface CategoryItem {
-  id: string;
+  id: number;
   name: string;
-  parent_id: string | null;
+  type?: string;
+  parent_id: number | null;
   subcategories?: CategoryItem[];
 }
 
 export default function RecurringPage() {
   const queryClient = useQueryClient();
+  const todayStr = new Date().toISOString().slice(0, 10);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [deletingRule, setDeletingRule] = useState<RecurringRule | null>(null);
@@ -50,8 +56,10 @@ export default function RecurringPage() {
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [description, setDescription] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'Card' | 'Cash'>('UPI');
+  const [note, setNote] = useState('');
   const [dayOfMonth, setDayOfMonth] = useState('1');
+  const [startDate, setStartDate] = useState(todayStr);
   const [formError, setFormError] = useState('');
 
   const { data: rules = [], isLoading } = useQuery<RecurringRule[]>({
@@ -71,7 +79,7 @@ export default function RecurringPage() {
   });
 
   const allCategories = React.useMemo(() => {
-    const list: { id: string; name: string }[] = [];
+    const list: { id: number; name: string }[] = [];
     categories.forEach((cat) => {
       list.push({ id: cat.id, name: cat.name });
       if (cat.subcategories) {
@@ -92,24 +100,28 @@ export default function RecurringPage() {
       closeModals();
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.message || 'Failed to create recurring rule');
+      setFormError(err.response?.data?.message || err.message || 'Failed to create recurring rule');
     },
   });
 
-  const toggleRuleMutation = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      return api.patch(`/recurring/${id}`, { is_active });
+  const togglePauseMutation = useMutation({
+    mutationFn: async ({ id, is_paused }: { id: number; is_paused: boolean }) => {
+      if (is_paused) {
+        return api.post(`/recurring/${id}/resume`);
+      } else {
+        return api.post(`/recurring/${id}/pause`);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recurring-rules'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to update rule status');
+      alert(err.response?.data?.message || err.message || 'Failed to update rule status');
     },
   });
 
   const deleteRuleMutation = useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (id: number) => {
       return api.delete(`/recurring/${id}`);
     },
     onSuccess: () => {
@@ -117,7 +129,7 @@ export default function RecurringPage() {
       setDeletingRule(null);
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to delete rule');
+      alert(err.response?.data?.message || err.message || 'Failed to delete rule');
       setDeletingRule(null);
     },
   });
@@ -128,8 +140,10 @@ export default function RecurringPage() {
     setType('expense');
     setAmount('');
     setCategoryId('');
-    setDescription('');
+    setPaymentMethod('UPI');
+    setNote('');
     setDayOfMonth('1');
+    setStartDate(todayStr);
     setFormError('');
   };
 
@@ -137,12 +151,13 @@ export default function RecurringPage() {
     e.preventDefault();
     const val = parseInt(amount, 10);
     const day = parseInt(dayOfMonth, 10);
+    const catId = parseInt(categoryId, 10);
 
     if (isNaN(val) || val <= 0) {
       setFormError('Amount must be a positive whole rupee value');
       return;
     }
-    if (!categoryId) {
+    if (!catId || isNaN(catId)) {
       setFormError('Please select a category');
       return;
     }
@@ -150,13 +165,19 @@ export default function RecurringPage() {
       setFormError('Day of month must be between 1 and 31');
       return;
     }
+    if (!startDate) {
+      setFormError('Start date is required');
+      return;
+    }
 
     createRuleMutation.mutate({
       type,
       amount: val,
-      category_id: categoryId,
-      description: description.trim() || null,
+      category_id: catId,
+      payment_method: paymentMethod,
+      note: note.trim() || undefined,
       day_of_month: day,
+      start_date: startDate,
     });
   };
 
@@ -196,12 +217,13 @@ export default function RecurringPage() {
           <div className="divide-y divide-border">
             {rules.map((rule) => {
               const isExpense = rule.type === 'expense';
+              const isActive = !rule.is_paused;
 
               return (
                 <div
                   key={rule.id}
                   className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${
-                    !rule.is_active ? 'opacity-60 bg-surface/30' : 'hover:bg-surface-elevated/40'
+                    !isActive ? 'opacity-60 bg-surface/30' : 'hover:bg-surface-elevated/40'
                   }`}
                 >
                   <div className="flex items-center space-x-3">
@@ -216,24 +238,23 @@ export default function RecurringPage() {
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="font-semibold text-text-primary">
-                          {rule.description || rule.category_name || 'Recurring Rule'}
+                          {rule.note || rule.category_name || 'Recurring Rule'}
                         </span>
-                        <Badge variant={rule.is_active ? 'income' : 'neutral'}>
-                          {rule.is_active ? 'Active' : 'Paused'}
+                        <Badge variant={isActive ? 'income' : 'neutral'}>
+                          {isActive ? 'Active' : 'Paused'}
+                        </Badge>
+                        <Badge variant="neutral" className="text-[10px]">
+                          {rule.payment_method}
                         </Badge>
                       </div>
                       <div className="flex items-center space-x-3 text-xs text-text-secondary mt-0.5">
-                        <span>Category: {rule.category_name}</span>
+                        <span>Category: {rule.category_name || `Category #${rule.category_id}`}</span>
                         <span>•</span>
                         <span className="flex items-center">
                           <Calendar className="w-3 h-3 mr-1" /> Every {rule.day_of_month}th of month
                         </span>
-                        {rule.last_run_at && (
-                          <>
-                            <span>•</span>
-                            <span>Last run: {new Date(rule.last_run_at).toLocaleDateString()}</span>
-                          </>
-                        )}
+                        <span>•</span>
+                        <span>Started: {rule.start_date}</span>
                       </div>
                     </div>
                   </div>
@@ -255,11 +276,11 @@ export default function RecurringPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() =>
-                          toggleRuleMutation.mutate({ id: rule.id, is_active: !rule.is_active })
+                          togglePauseMutation.mutate({ id: rule.id, is_paused: rule.is_paused })
                         }
-                        title={rule.is_active ? 'Pause Rule' : 'Resume Rule'}
+                        title={isActive ? 'Pause Rule' : 'Resume Rule'}
                       >
-                        {rule.is_active ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-accent-income" />}
+                        {isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 text-accent-income" />}
                       </Button>
 
                       <Button
@@ -350,24 +371,53 @@ export default function RecurringPage() {
             </select>
           </div>
 
-          <Input
-            label="Day of Month (1 - 31)"
-            type="number"
-            min="1"
-            max="31"
-            value={dayOfMonth}
-            onChange={(e) => setDayOfMonth(e.target.value)}
-            required
-          />
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1">Payment Method</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['UPI', 'Card', 'Cash'] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => setPaymentMethod(method)}
+                  className={`py-2 text-xs font-semibold rounded-lg border transition ${
+                    paymentMethod === method
+                      ? 'border-primary-500 bg-primary-500/10 text-primary-500'
+                      : 'border-border text-text-secondary hover:bg-surface-elevated'
+                  }`}
+                >
+                  {method}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Day of Month (1 - 31)"
+              type="number"
+              min="1"
+              max="31"
+              value={dayOfMonth}
+              onChange={(e) => setDayOfMonth(e.target.value)}
+              required
+            />
+            <Input
+              label="Start Date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              required
+            />
+          </div>
           <p className="text-[11px] text-text-muted">
             For months with fewer days (e.g. Feb 28/29, April 30), runs are clamped automatically to the last day of that month.
           </p>
 
           <Input
-            label="Description (Optional)"
+            label="Note / Description (Optional)"
             placeholder="e.g. Apartment Rent, Netflix, SIP"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
           />
 
           <div className="flex justify-end space-x-3 pt-4 border-t border-border">

@@ -21,17 +21,19 @@ import {
 } from 'lucide-react';
 
 interface CategoryBudgetStatus {
-  category_id: string;
+  category_id: number;
   category_name: string;
-  base_amount: number;
+  budget_amount: number;
   spent: number;
+  remaining: number;
   percentage: number;
 }
 
 interface OverallBudgetStatus {
-  base_amount: number;
-  carry_forward: number;
+  has_budget: boolean;
+  base_budget: number;
   effective_budget: number;
+  carry_forward: number;
   spent: number;
   remaining: number;
   percentage: number;
@@ -39,15 +41,16 @@ interface OverallBudgetStatus {
 
 interface BudgetStatusResponse {
   month: string;
-  overall: OverallBudgetStatus | null;
+  overall: OverallBudgetStatus;
   categories: CategoryBudgetStatus[];
+  sum_category_budgets: number;
 }
 
 interface CategoryItem {
-  id: string;
+  id: number;
   name: string;
   is_protected: boolean;
-  parent_id: string | null;
+  parent_id: number | null;
   subcategories?: CategoryItem[];
 }
 
@@ -59,7 +62,7 @@ export default function BudgetsPage() {
   // Modals
   const [isOverallModalOpen, setIsOverallModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; amount: number } | null>(null);
+  const [editingCategory, setEditingCategory] = useState<{ id: number; name: string; amount: number } | null>(null);
 
   // Form states
   const [overallAmount, setOverallAmount] = useState('');
@@ -85,7 +88,7 @@ export default function BudgetsPage() {
 
   // Flatten categories for select dropdown
   const allCategories = React.useMemo(() => {
-    const list: { id: string; name: string }[] = [];
+    const list: { id: number; name: string }[] = [];
     categories.forEach((cat) => {
       list.push({ id: cat.id, name: cat.name });
       if (cat.subcategories) {
@@ -99,8 +102,8 @@ export default function BudgetsPage() {
 
   // Overall budget mutation
   const overallMutation = useMutation({
-    mutationFn: async (base_amount: number) => {
-      return api.put('/budgets/overall', { base_amount });
+    mutationFn: async (amount: number) => {
+      return api.put('/budgets/overall', { amount });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets-status'] });
@@ -108,14 +111,14 @@ export default function BudgetsPage() {
       setFormError('');
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.message || 'Failed to update overall budget');
+      setFormError(err.response?.data?.message || err.message || 'Failed to update overall budget');
     },
   });
 
   // Category budget mutation
   const categoryMutation = useMutation({
-    mutationFn: async ({ category_id, base_amount }: { category_id: string; base_amount: number }) => {
-      return api.put(`/budgets/category/${category_id}`, { base_amount });
+    mutationFn: async ({ category_id, amount }: { category_id: number; amount: number }) => {
+      return api.put(`/budgets/categories/${category_id}`, { amount });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets-status'] });
@@ -124,20 +127,20 @@ export default function BudgetsPage() {
       setFormError('');
     },
     onError: (err: any) => {
-      setFormError(err.response?.data?.message || 'Failed to update category budget');
+      setFormError(err.response?.data?.message || err.message || 'Failed to update category budget');
     },
   });
 
   // Delete category budget mutation
   const deleteCategoryMutation = useMutation({
-    mutationFn: async (category_id: string) => {
-      return api.delete(`/budgets/category/${category_id}`);
+    mutationFn: async (category_id: number) => {
+      return api.delete(`/budgets/categories/${category_id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budgets-status'] });
     },
     onError: (err: any) => {
-      alert(err.response?.data?.message || 'Failed to delete category budget');
+      alert(err.response?.data?.message || err.message || 'Failed to delete category budget');
     },
   });
 
@@ -153,9 +156,9 @@ export default function BudgetsPage() {
 
   const handleSaveCategory = (e: React.FormEvent) => {
     e.preventDefault();
-    const catId = editingCategory ? editingCategory.id : selectedCatId;
+    const catId = editingCategory ? editingCategory.id : parseInt(selectedCatId, 10);
     const val = parseInt(catAmount, 10);
-    if (!catId) {
+    if (!catId || isNaN(catId)) {
       setFormError('Please select a category');
       return;
     }
@@ -163,12 +166,12 @@ export default function BudgetsPage() {
       setFormError('Please enter a valid positive whole rupee amount');
       return;
     }
-    categoryMutation.mutate({ category_id: catId, base_amount: val });
+    categoryMutation.mutate({ category_id: catId, amount: val });
   };
 
   const openEditCat = (cat: CategoryBudgetStatus) => {
-    setEditingCategory({ id: cat.category_id, name: cat.category_name, amount: cat.base_amount });
-    setCatAmount(cat.base_amount.toString());
+    setEditingCategory({ id: cat.category_id, name: cat.category_name, amount: cat.budget_amount });
+    setCatAmount(cat.budget_amount.toString());
     setFormError('');
     setIsCategoryModalOpen(true);
   };
@@ -182,6 +185,7 @@ export default function BudgetsPage() {
   };
 
   const overall = status?.overall;
+  const hasOverall = overall?.has_budget === true;
   const catBudgets = status?.categories || [];
 
   return (
@@ -206,12 +210,12 @@ export default function BudgetsPage() {
             />
           </div>
           <Button onClick={() => {
-            setOverallAmount(overall?.base_amount ? overall.base_amount.toString() : '');
+            setOverallAmount(hasOverall && overall ? overall.base_budget.toString() : '');
             setFormError('');
             setIsOverallModalOpen(true);
           }}>
             <Edit2 className="w-4 h-4 mr-2" />
-            {overall ? 'Edit Overall Budget' : 'Set Overall Budget'}
+            {hasOverall ? 'Edit Overall Budget' : 'Set Overall Budget'}
           </Button>
         </div>
       </div>
@@ -219,7 +223,7 @@ export default function BudgetsPage() {
       {/* Overall Budget Banner / Card */}
       {isLoading ? (
         <Skeleton className="h-44 w-full" />
-      ) : !overall ? (
+      ) : !hasOverall || !overall ? (
         <Card className="p-8 text-center bg-primary-500/5 border-dashed border-2 border-primary-500/30">
           <PieChart className="w-12 h-12 mx-auto mb-3 text-primary-500" />
           <h3 className="text-lg font-semibold text-text-primary">No Overall Budget Set</h3>
@@ -251,7 +255,7 @@ export default function BudgetsPage() {
                 )}
               </div>
               <p className="text-xs text-text-muted mt-1">
-                Base limit: {formatINR(overall.base_amount)}
+                Base limit: {formatINR(overall.base_budget)}
               </p>
             </div>
 
@@ -312,14 +316,14 @@ export default function BudgetsPage() {
           <div>
             <h2 className="text-lg font-bold text-text-primary">Category Budgets</h2>
             <p className="text-xs text-text-secondary">
-              Total assigned: {formatINR(catBudgets.reduce((acc, c) => acc + c.base_amount, 0))} / {formatINR(overall?.base_amount || 0)}
+              Total assigned: {formatINR(status?.sum_category_budgets || catBudgets.reduce((acc, c) => acc + c.budget_amount, 0))} / {formatINR(overall?.base_budget || 0)}
             </p>
           </div>
           <Button
             size="sm"
             onClick={openAddCat}
-            disabled={!overall}
-            title={!overall ? 'Set overall budget first' : undefined}
+            disabled={!hasOverall}
+            title={!hasOverall ? 'Set overall budget first' : undefined}
           >
             <Plus className="w-4 h-4 mr-1.5" />
             Add Category Budget
@@ -336,7 +340,7 @@ export default function BudgetsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {catBudgets.map((cat) => {
-              const remaining = cat.base_amount - cat.spent;
+              const remaining = cat.remaining;
               const isOver = cat.percentage >= 100;
               const isWarning = cat.percentage >= 80 && !isOver;
 
@@ -346,7 +350,7 @@ export default function BudgetsPage() {
                     <div>
                       <h4 className="font-semibold text-text-primary">{cat.category_name}</h4>
                       <span className="text-xs text-text-secondary">
-                        Limit: {formatINR(cat.base_amount)}
+                        Limit: {formatINR(cat.budget_amount)}
                       </span>
                     </div>
                     <div className="flex items-center space-x-1">
