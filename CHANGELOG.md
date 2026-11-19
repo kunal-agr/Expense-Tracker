@@ -40,3 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Split lock invariant upon first participant acceptance and cancellation/edit guards (FR-068, FR-069).
   - Permanent groups with invitation workflow, creator succession upon departure, and auto-deletion when empty (FR-073, FR-074, FR-075, FR-076, FR-077, FR-078).
   - User blocking preventing split requests and group invites with generic non-revealing error messages (FR-072).
+- **Notifications (Phase 7)**:
+  - Notification channel architecture with in-app storage for v1 (FR-080, FR-084).
+  - Read/unread tracking, mark single read, mark all read, and unread count polling endpoint (`GET /api/v1/notifications/unread-count`, FR-080, FR-082).
+  - System-wide event notifications for split bill invitations/acceptances/rejections/expiries, budget threshold warnings (80% and 100%), recurring rule executions/skips, and goal completion alerts (FR-083).
+- **Dashboard & Transaction Exports (Phase 8)**:
+  - Central dashboard endpoint (`GET /api/v1/dashboard`) aggregating wallet balance, current month income vs expense, category donut breakdown, budget progress, recent transactions, goals progress, and 6-month historical trend (FR-090).
+  - Multi-format transaction export supporting CSV, Excel (.xlsx), and PDF with custom filters for date range, category, and transaction type (FR-091, FR-092, FR-094).
+  - ReportLab PDF generator rendering summary boxes (income, expense, net, count) and paginated transaction tables without charts (FR-093).
