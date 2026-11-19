@@ -21,3 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Device session management (`POST /api/v1/auth/logout`, `POST /api/v1/auth/logout-all`, `GET /api/v1/auth/sessions`) (FR-007).
   - Centralized data isolation and authentication dependency (`get_current_user`, `get_user_record`, `user_scoped_query`) (NFR-002).
   - User profile retrieval (`GET /api/v1/me`), dynamic username changes (`PATCH /api/v1/me/username`) (FR-008), and account deletion with cascading cleanup and group succession (`DELETE /api/v1/me`) (FR-011).
+- **Wallet, Opening Balance, Transactions & Categories (Phase 4)**:
+  - Opening balance setup and editing with whole-rupee validation (minimum ₹100) and balance non-negative constraint checking (FR-009, FR-010, FR-020, FR-022).
+  - Starter category seeder initializing 15 expense categories and 7 income categories with subcategories from Appendix A upon wallet creation (FR-030).
+  - Category management with max 1 level of nesting, rename support, and deletion protection for "Shared" and "Other" or in-use categories (FR-031, FR-032).
+  - Transaction operations (create, filter, search, sort, pagination, update, delete) with atomic row locking on wallets, future date rejection, and balance exhaustion protection (FR-023, FR-024, FR-025, FR-026, FR-028).
