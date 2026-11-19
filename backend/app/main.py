@@ -12,6 +12,7 @@ from app.errors import (
     validation_exception_handler,
     rate_limit_handler,
 )
+from app.routers import auth, account
 
 app = FastAPI(
     title="Expense Tracker API",
@@ -40,6 +41,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers under /api/v1
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(account.router, prefix="/api/v1")
 
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])
