@@ -2,6 +2,7 @@ from typing import Any
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from slowapi.errors import RateLimitExceeded
 
 
@@ -27,7 +28,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         "detail": exc.message,
     }
     if exc.details is not None:
-        content["details"] = exc.details
+        content["details"] = jsonable_encoder(exc.details)
     return JSONResponse(status_code=exc.status_code, content=content)
 
 
@@ -38,7 +39,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "code": "VALIDATION_ERROR",
             "message": "Input validation error",
             "detail": "Input validation error",
-            "details": exc.errors(),
+            "details": jsonable_encoder(exc.errors()),
         },
     )
 
