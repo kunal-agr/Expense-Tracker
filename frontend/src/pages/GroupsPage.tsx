@@ -29,14 +29,17 @@ interface GroupMember {
 }
 
 interface GroupSummary {
-  id: string;
+  id: number | string;
   name: string;
-  description: string | null;
-  created_by: string;
+  description?: string | null;
+  creator_id?: number;
+  creator_username?: string | null;
+  created_by?: string;
   created_at: string;
   member_count: number;
-  is_creator: boolean;
-  my_status: 'active' | 'invited';
+  is_creator?: boolean;
+  user_status?: string;
+  my_status?: 'active' | 'invited';
 }
 
 interface GroupDetail extends GroupSummary {
@@ -227,8 +230,9 @@ export default function GroupsPage() {
           ) : (
             <div className="space-y-2">
               {groups.map((grp) => {
-                const isSelected = selectedGroupId === grp.id;
-                const isInvited = grp.my_status === 'invited';
+                const isSelected = selectedGroupId === grp.id.toString();
+                const isInvited = grp.user_status === 'invited' || grp.my_status === 'invited';
+                const isCreator = grp.is_creator || (user?.username && grp.creator_username === user?.username);
 
                 return (
                   <Card
@@ -248,7 +252,7 @@ export default function GroupsPage() {
                         <div>
                           <h3 className="font-semibold text-text-primary text-sm flex items-center space-x-1.5">
                             <span>{grp.name}</span>
-                            {grp.is_creator && (
+                            {isCreator && (
                               <span title="Creator">
                                 <Crown className="w-3.5 h-3.5 text-primary-500" />
                               </span>
