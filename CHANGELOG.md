@@ -26,3 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Starter category seeder initializing 15 expense categories and 7 income categories with subcategories from Appendix A upon wallet creation (FR-030).
   - Category management with max 1 level of nesting, rename support, and deletion protection for "Shared" and "Other" or in-use categories (FR-031, FR-032).
   - Transaction operations (create, filter, search, sort, pagination, update, delete) with atomic row locking on wallets, future date rejection, and balance exhaustion protection (FR-023, FR-024, FR-025, FR-026, FR-028).
+- **Budgets, Savings Goals & Recurring Transactions (Phase 5)**:
+  - Overall monthly budget with automatic month-to-month carry-forward calculation for unused funds (FR-040, FR-043).
+  - Category-level budgets with sum constraints enforcing that the category budget sum cannot exceed the overall base budget (FR-041, FR-042).
+  - Automatic threshold budget notifications firing at most once per month at 80% and 100% spending (FR-045, FR-046).
+  - Savings goals with fund contributions and withdrawals directly linked to wallet balances and completion alerts (FR-053, FR-054, FR-055).
+  - Monthly recurring transaction rules with calendar day clamping, balance-insufficient skip logic, idempotency via run tracking, and catch-up on login (FR-048, FR-049, FR-050, FR-051, FR-052a, FR-052b).
+  - Daily internal cron endpoint (`POST /api/v1/internal/jobs/daily`) secured with `X-Cron-Secret` header for automated recurring execution, 7-day split expiry, and 90-day notification pruning (FR-052b, FR-067, FR-081, NFR-009).
