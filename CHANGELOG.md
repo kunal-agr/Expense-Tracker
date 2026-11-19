@@ -33,3 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Savings goals with fund contributions and withdrawals directly linked to wallet balances and completion alerts (FR-053, FR-054, FR-055).
   - Monthly recurring transaction rules with calendar day clamping, balance-insufficient skip logic, idempotency via run tracking, and catch-up on login (FR-048, FR-049, FR-050, FR-051, FR-052a, FR-052b).
   - Daily internal cron endpoint (`POST /api/v1/internal/jobs/daily`) secured with `X-Cron-Secret` header for automated recurring execution, 7-day split expiry, and 90-day notification pruning (FR-052b, FR-067, FR-081, NFR-009).
+- **Bill Splitting, Groups & User Blocking (Phase 6)**:
+  - Bill splitting with exact, percentage, and shares calculation modes, plus explicit remainder bearer assignment for whole-rupee remainder resolution (FR-060, FR-061, FR-062).
+  - Full bill upfront expense creation for payer with wallet balance verification (FR-060).
+  - Atomic split acceptance in a single database transaction with deterministic row locking on both wallets, participant balance verification, "Shared" expense creation, and payer bill reduction (FR-065, NFR-010).
+  - Split lock invariant upon first participant acceptance and cancellation/edit guards (FR-068, FR-069).
+  - Permanent groups with invitation workflow, creator succession upon departure, and auto-deletion when empty (FR-073, FR-074, FR-075, FR-076, FR-077, FR-078).
+  - User blocking preventing split requests and group invites with generic non-revealing error messages (FR-072).
