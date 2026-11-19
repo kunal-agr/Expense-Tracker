@@ -1,5 +1,9 @@
 import os
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BASE_DIR = Path(__file__).resolve().parent.parent  # Points to backend/
+_ROOT_DIR = _BASE_DIR.parent  # Points to repository root
 
 
 class Settings(BaseSettings):
@@ -14,7 +18,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            _BASE_DIR / ".env",
+            _ROOT_DIR / ".env",
+            ".env",
+        ),
         env_file_encoding="utf-8",
         extra="ignore",
     )
