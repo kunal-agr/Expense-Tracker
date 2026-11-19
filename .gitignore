@@ -1,0 +1,52 @@
+# Environments and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+coverage/
+htmlcov/
+.coverage
+
+# Node / Frontend
+node_modules/
+.npm
+dist-ssr
+*.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Exported files
+exports/
+*.csv
+*.xlsx
+*.pdf
+!docs/*.pdf
