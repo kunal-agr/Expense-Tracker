@@ -26,6 +26,7 @@ from app.auth.schemas import (
     SessionResponse,
 )
 from app.auth.dependencies import get_current_user
+from app.services.recurring_service import apply_recurring_for_user
 from app.errors import AppException
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -185,6 +186,13 @@ def login(
 
     _set_refresh_cookie(response, raw_refresh)
     access_token = create_access_token(user.id, user.username)
+
+    # Catch up missed recurring transactions on login (FR-052b)
+    try:
+        apply_recurring_for_user(db, user.id)
+    except Exception:
+        # Prevent catch-up failures from blocking user login
+        db.rollback()
 
     # Check if user has initialized their wallet (FR-009)
     has_wallet = db.scalar(select(Wallet.id).where(Wallet.user_id == user.id)) is not None

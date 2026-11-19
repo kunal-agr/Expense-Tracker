@@ -12,7 +12,17 @@ from app.errors import (
     validation_exception_handler,
     rate_limit_handler,
 )
-from app.routers import auth, account, wallet, categories, transactions
+from app.routers import (
+    auth,
+    account,
+    wallet,
+    categories,
+    transactions,
+    budgets,
+    goals,
+    recurring,
+    jobs,
+)
 
 app = FastAPI(
     title="Expense Tracker API",
@@ -48,6 +58,10 @@ app.include_router(account.router, prefix="/api/v1")
 app.include_router(wallet.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(transactions.router, prefix="/api/v1")
+app.include_router(budgets.router, prefix="/api/v1")
+app.include_router(goals.router, prefix="/api/v1")
+app.include_router(recurring.router, prefix="/api/v1")
+app.include_router(jobs.router, prefix="/api/v1")
 
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])

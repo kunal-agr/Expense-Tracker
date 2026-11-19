@@ -17,6 +17,7 @@ from app.schemas.transaction import (
     TransactionListResponse,
 )
 from app.auth.dependencies import get_current_user, get_user_record
+from app.services.budget_service import check_and_trigger_budget_alerts
 from app.errors import AppException
 
 router = APIRouter(prefix="/transactions", tags=["Transactions"])
@@ -95,6 +96,11 @@ def create_transaction(
     db.add(tx)
     db.commit()
     db.refresh(tx)
+
+    # Check budget alerts if expense (FR-045, FR-046)
+    if tx.type == "expense":
+        check_and_trigger_budget_alerts(db, current_user.id, tx.date)
+        db.commit()
 
     return TransactionResponse(
         id=tx.id,
@@ -335,6 +341,10 @@ def update_transaction(
 
     db.commit()
     db.refresh(tx)
+
+    if tx.type == "expense":
+        check_and_trigger_budget_alerts(db, current_user.id, tx.date)
+        db.commit()
 
     category = db.scalar(select(Category).where(Category.id == tx.category_id))
     subcategory = (
