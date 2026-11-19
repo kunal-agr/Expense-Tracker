@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, status
-from sqlalchemy import select, and_, or_, desc
+from sqlalchemy import select, and_, or_, desc, func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -149,9 +149,18 @@ def create_split(
         raw_list = list(payload.participants)
 
         # Ensure payer is in list
-        payer_included = any(p.username.strip().lower() == current_user.username for p in raw_list)
+        payer_included = any(p.username.strip().lower() == current_user.username.lower() for p in raw_list)
         if not payer_included:
-            raw_list.append(ParticipantInput(username=current_user.username, shares=1))
+            if payload.split_type == "exact":
+                others_amt = sum(p.amount or 0 for p in raw_list)
+                payer_amt = max(0, payload.total_amount - others_amt)
+                raw_list.append(ParticipantInput(username=current_user.username, amount=payer_amt))
+            elif payload.split_type == "percentage":
+                others_pct = sum(p.percentage or 0.0 for p in raw_list)
+                payer_pct = max(0.0, 100.0 - others_pct)
+                raw_list.append(ParticipantInput(username=current_user.username, percentage=payer_pct))
+            else:
+                raw_list.append(ParticipantInput(username=current_user.username, shares=1))
 
         for p_in in raw_list:
             u_name = p_in.username.strip().lower()
@@ -159,12 +168,12 @@ def create_split(
                 continue
             seen_usernames.add(u_name)
 
-            u = db.scalar(select(User).where(User.username == u_name))
+            u = db.scalar(select(User).where(func.lower(User.username) == u_name))
             if not u:
                 raise AppException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     code="USER_NOT_FOUND",
-                    message=f"User '{u_name}' not found.",
+                    message=f"User '{p_in.username}' not found.",
                 )
 
             # Check blocking (FR-072)
@@ -184,7 +193,8 @@ def create_split(
     # Resolve remainder bearer
     remainder_bearer_id = None
     if payload.remainder_bearer_username:
-        b_user = db.scalar(select(User).where(User.username == payload.remainder_bearer_username.strip().lower()))
+        b_name = payload.remainder_bearer_username.strip().lower()
+        b_user = db.scalar(select(User).where(func.lower(User.username) == b_name))
         if b_user:
             remainder_bearer_id = b_user.id
 
@@ -598,6 +608,7 @@ def reject_split_share(
 
 
 @router.delete("/{split_id}", status_code=status.HTTP_200_OK)
+@router.post("/{split_id}/cancel", status_code=status.HTTP_200_OK)
 def cancel_split(
     split_id: int,
     current_user: User = Depends(get_current_user),
