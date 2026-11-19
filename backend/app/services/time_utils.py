@@ -10,6 +10,20 @@ def get_current_ist_datetime() -> datetime:
     return datetime.now(timezone.utc).astimezone(IST)
 
 
+def ensure_utc(dt: datetime | None) -> datetime | None:
+    """Ensure datetime is timezone-aware UTC datetime."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def utc_now() -> datetime:
+    """Current UTC datetime."""
+    return datetime.now(timezone.utc)
+
+
 def get_current_ist_date() -> date:
     """Current date in IST."""
     return get_current_ist_datetime().date()

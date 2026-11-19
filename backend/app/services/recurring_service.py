@@ -11,6 +11,8 @@ from app.models.notification import Notification
 from app.services.time_utils import (
     get_current_ist_date,
     clamp_day_to_month,
+    ensure_utc,
+    utc_now,
 )
 from app.services.budget_service import check_and_trigger_budget_alerts
 
@@ -168,19 +170,19 @@ def expire_pending_splits(db: Session, as_of: datetime | None = None) -> int:
     """
     Expire split requests that have passed their 7-day expiration (FR-066, FR-067).
     """
-    now = as_of or datetime.now(timezone.utc)
-    expired_parts = db.scalars(
+    now = ensure_utc(as_of or utc_now())
+    all_pending_parts = db.scalars(
         select(SplitParticipant)
         .join(Split, Split.id == SplitParticipant.split_id)
         .where(
             SplitParticipant.status == "pending",
-            Split.expires_at <= now,
         )
     ).all()
 
     count = 0
-    for p in expired_parts:
-        p.status = "expired"
+    for p in all_pending_parts:
+        if ensure_utc(p.split.expires_at) <= now:
+            p.status = "expired"
         p.responded_at = now
         split_obj = p.split
         notif = Notification(

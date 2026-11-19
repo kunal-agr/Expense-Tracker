@@ -22,6 +22,9 @@ from app.routers import (
     goals,
     recurring,
     jobs,
+    blocks,
+    groups,
+    splits,
 )
 
 app = FastAPI(
@@ -62,6 +65,9 @@ app.include_router(budgets.router, prefix="/api/v1")
 app.include_router(goals.router, prefix="/api/v1")
 app.include_router(recurring.router, prefix="/api/v1")
 app.include_router(jobs.router, prefix="/api/v1")
+app.include_router(blocks.router, prefix="/api/v1")
+app.include_router(groups.router, prefix="/api/v1")
+app.include_router(splits.router, prefix="/api/v1")
 
 
 @app.get("/health", status_code=status.HTTP_200_OK, tags=["Health"])
