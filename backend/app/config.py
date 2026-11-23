@@ -7,7 +7,12 @@ _ROOT_DIR = _BASE_DIR.parent  # Points to repository root
 
 
 class Settings(BaseSettings):
+    # Database Connection Strings
+    LOCAL_DATABASE_URL: str = ""
+    SUPABASE_DATABASE_URL: str = ""
     DATABASE_URL: str = "sqlite:///./expense_tracker.db"
+
+    # Authentication & Security
     JWT_SECRET: str = "change-me-to-a-secure-random-secret-key-at-least-32-chars"
     JWT_ACCESS_MINUTES: int = 15
     JWT_REFRESH_DAYS: int = 7
