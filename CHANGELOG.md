@@ -5,18 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2026-11-23
 
 ### Added
+- **Production Deployment**:
+  - Deployed: Render (backend) + Vercel (frontend) + Supabase (database).
+  - Production startup script `backend/start.sh` for Render deployment running database migrations prior to Uvicorn boot on `$PORT`.
 - **Docker Local Development Setup**:
   - Production-ready `backend/Dockerfile` using `python:3.12-slim` with layer caching, automated entrypoint migrations, and health checks.
   - Multi-service `docker-compose.yml` orchestrating FastAPI backend and local PostgreSQL 16 container with health checks and volume persistence.
 - **Database & Cloud Migration**:
   - Verified and executed Alembic database migrations against Supabase PostgreSQL (18 tables, clean schema).
-- **Deployment**:
-  - Production startup script `backend/start.sh` for Render deployment running migrations prior to Uvicorn boot on `$PORT`.
-
-## [1.0.0] - 2026-11-19
 
 ### Added
 - **Repository Scaffold & Architecture (Phase 1)**:
