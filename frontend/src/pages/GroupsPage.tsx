@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { useAuth } from '../context/AuthContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -47,6 +48,7 @@ interface GroupDetail extends GroupSummary {
 }
 
 export default function GroupsPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
@@ -88,7 +90,7 @@ export default function GroupsPage() {
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
       closeModals();
-      setSelectedGroupId(res.data.id);
+      setSelectedGroupId(res.data.id.toString());
     },
     onError: (err: any) => {
       setFormError(err.response?.data?.message || 'Failed to create group');
@@ -143,7 +145,7 @@ export default function GroupsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
-      if (selectedGroupId === deletingGroup?.id) {
+      if (selectedGroupId === deletingGroup?.id.toString()) {
         setSelectedGroupId(null);
       }
       setDeletingGroup(null);
@@ -237,7 +239,7 @@ export default function GroupsPage() {
                 return (
                   <Card
                     key={grp.id}
-                    onClick={() => setSelectedGroupId(grp.id)}
+                    onClick={() => setSelectedGroupId(grp.id.toString())}
                     className={`p-4 cursor-pointer transition border-2 ${
                       isSelected
                         ? 'border-primary-500 bg-primary-500/5'
@@ -270,7 +272,7 @@ export default function GroupsPage() {
                           className="text-xs h-7 px-2"
                           onClick={(e) => {
                             e.stopPropagation();
-                            acceptInviteMutation.mutate(grp.id);
+                            acceptInviteMutation.mutate(grp.id.toString());
                           }}
                         >
                           Join
@@ -496,7 +498,7 @@ export default function GroupsPage() {
               variant="primary"
               className="bg-accent-expense hover:bg-accent-expense/90"
               isLoading={leaveGroupMutation.isPending}
-              onClick={() => leavingGroup && leaveGroupMutation.mutate(leavingGroup.id)}
+              onClick={() => leavingGroup && leaveGroupMutation.mutate(leavingGroup.id.toString())}
             >
               Confirm Leave
             </Button>
@@ -526,7 +528,7 @@ export default function GroupsPage() {
               variant="primary"
               className="bg-accent-expense hover:bg-accent-expense/90"
               isLoading={deleteGroupMutation.isPending}
-              onClick={() => deletingGroup && deleteGroupMutation.mutate(deletingGroup.id)}
+              onClick={() => deletingGroup && deleteGroupMutation.mutate(deletingGroup.id.toString())}
             >
               Delete Group
             </Button>
